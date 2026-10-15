@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Senior Staff Dashboard</title>
+  <style>
+    body { font-family: sans-serif; margin: 2rem; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: .4rem .6rem; text-align: left; }
+    th { background: #f0f0f0; }
+    input { margin-bottom: 1rem; padding: .4rem; }
+    .tag { background: #e0ecff; border-radius: 4px; padding: 0 .4rem; margin-right: .2rem; }
+  </style>
+</head>
+<body>
+  <h1>Senior Staff Dashboard</h1>
+  <p>Senior staff, departments and tags.</p>
+  <input id="filter" type="search" placeholder="Filter...">
+  <table>
+    <thead><tr><th>Name</th><th>Department</th><th>Tags</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <script>
+    const staff = [
+      { name: "Example Person", department: "Example Department", tags: ["example"] }
+    ];
+    const rows = document.getElementById("rows");
+    function render(q) {
+      rows.innerHTML = "";
+      staff.filter(s => JSON.stringify(s).toLowerCase().includes(q.toLowerCase()))
+        .forEach(s => {
+          const tr = document.createElement("tr");
+          [s.name, s.department].forEach(t => {
+            const td = document.createElement("td"); td.textContent = t; tr.appendChild(td);
+          });
+          const td = document.createElement("td");
+          s.tags.forEach(t => {
+            const sp = document.createElement("span"); sp.className = "tag"; sp.textContent = t; td.appendChild(sp);
+          });
+          tr.appendChild(td); rows.appendChild(tr);
+        });
+    }
+    document.getElementById("filter").addEventListener("input", e => render(e.target.value));
+    render("");
+  </script>
+</body>
+</html>
