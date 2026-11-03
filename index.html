@@ -492,7 +492,8 @@ function methodFeatures(p) {   // method name -> strength
   return p._mf = f;
 }
 // Extra field-cluster memberships on top of the computed ones (person -> field names).
-const FIELD_EXTRA = { "Franco Donati": ["Products & technology"], "Martina Vijver": ["Wildlife & conservation"] };   // Vijver: effects on species and ecosystems
+const FIELD_EXTRA = { "Franco Donati": ["Products & technology"], "Martina Vijver": ["Wildlife & conservation"],
+  "Valerio Barbarossa": ["Water & aquatic systems"], "Patrik Henriksson": ["Water & aquatic systems"] };   // Vijver: effects on species and ecosystems
 const FEAT_W = { tag: 1, kw: 0.7, cml: 0.35 };
 function personFeatures(p, mode) {
   const f = new Map();
@@ -616,7 +617,14 @@ function buildClusterGraph(nodes, mode) {
   if (mode === "method") assignNames(clusters, METHODS, methodScore); else assignNames(clusters, FIELD_NAMES, fieldScore);
   if (mode !== "method") Object.entries(FIELD_EXTRA).forEach(([person, extra]) => {   // manual extra field memberships
     const n = nodes.find(x => x.person.name === person); if (!n) return;
-    extra.forEach(name => { const c = clusters.find(x => x.name === name); if (c && !n.memberships.includes(c)) { n.memberships.push(c); c.members.push(n); c.people.push(n.person); if (n.person.field === "industrial_ecology") c.ie++; else c.eb++; } });
+    extra.forEach(name => {
+      let c = clusters.find(x => x.name === name);
+      if (!c) {   // the named field did not form on its own: create it from the manually assigned people
+        c = { id: clusters.length, name, short: name, color: PALETTE[clusters.length % PALETTE.length], nodes: [], members: [], people: [], ie: 0, eb: 0 };
+        clusters.push(c);
+      }
+      if (!n.memberships.includes(c)) { n.memberships.push(c); c.members.push(n); c.people.push(n.person); if (n.person.field === "industrial_ecology") c.ie++; else c.eb++; }
+    });
   });
   if (mode === "method") clusters.forEach(c => { if (!METHODS.some(m => m.name === c.name)) c.name = c.short = "Methods not specified"; });   // people without method evidence in their profile
   nodes.forEach(n => { n.deg = 0; });
@@ -1085,7 +1093,7 @@ function renderClusters() {
     const tot = c.ie + c.eb || 1;
     return `<div class="panel cluster ${sel ? "sel" : ""}" data-c="${c.id}" role="button" tabindex="0" style="border-left-color:${c.color}">
       <b>${cmlGrouped() ? `<span style="color:${c.color}">${icon(c.name, 16)}</span> ` : ""}${esc(c.name)} <small>· ${c.people.length} people${state.view === "people" ? "" : ` · ${c.nodes.length} items`}</small></b>
-      <small>${c.nodes.slice(0, state.view === "people" ? 10 : 6).map(n => esc(n.id)).join(", ")}${c.nodes.length > (state.view === "people" ? 10 : 6) ? "…" : ""}</small>
+      <small>${(c.members || c.nodes).slice(0, 10).map(n => esc(n.id)).join(", ")}${(c.members || c.nodes).length > 10 ? "…" : ""}</small>
       <div class="splitbar" title="${c.ie} industrial ecology · ${c.eb} environmental biology"><i style="width:${100 * c.ie / tot}%;background:${COLORS.industrial_ecology}"></i><i style="width:${100 * c.eb / tot}%;background:${COLORS.environmental_biology}"></i></div></div>`;
   }).join("") || '<span class="mute">No clusters – lower “min. people per node” or relax the filters.</span>';
 }
