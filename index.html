@@ -14,13 +14,20 @@
   header .stats { color:var(--mute); }
   .hbtns { margin-left:auto; display:flex; gap:6px; }
   .btn { display:inline-flex; align-items:center; gap:6px; }
-  main { flex:1; min-height:0; display:grid; grid-template-columns:290px minmax(0,1fr) 360px; }
+  main { position:relative; flex:1; min-height:0; display:grid; grid-template-columns:290px minmax(0,1fr) 360px; }
   aside, section { overflow:auto; padding:12px; min-height:0; }
   body.hide-filters main { grid-template-columns:0 minmax(0,1fr) 360px; }
   body.hide-people main { grid-template-columns:290px minmax(0,1fr) 0; }
   body.hide-filters.hide-people main { grid-template-columns:0 minmax(0,1fr) 0; }
   body.hide-filters aside.filters, body.hide-people aside.people { padding:0; border:0; overflow:hidden; visibility:hidden; }
-  .hbtns .btn[aria-pressed=false] { background:#eef1f5; color:var(--mute); }
+  .edgetab { position:absolute; top:50%; transform:translateY(-50%); z-index:6; width:16px; height:64px; padding:0; border:1px solid var(--line); background:#fff; color:var(--mute); font-size:16px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 1px 4px rgba(0,0,0,.12); }
+  .edgetab:hover { background:#eef3ff; color:var(--accent); }
+  .edgetab-l { left:290px; border-left:0; border-radius:0 8px 8px 0; }
+  .edgetab-r { right:360px; border-right:0; border-radius:8px 0 0 8px; }
+  body.hide-filters .edgetab-l { left:0; }
+  body.hide-people .edgetab-r { right:0; }
+  @media (max-width:1100px) { .edgetab-l { left:260px; } body.hide-filters .edgetab-l { left:0; } .edgetab-r { display:none; } }
+  @media (max-width:760px) { .edgetab { display:none; } }
   aside.filters { background:#fff; border-right:1px solid var(--line); }
   aside.people { background:#fff; border-left:1px solid var(--line); }
   h2 { font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--mute); margin:16px 0 6px; display:flex; align-items:center; gap:8px; }
@@ -51,7 +58,10 @@
   #svg { cursor:grab; touch-action:none; user-select:none; }
   #svg.panning, #svg.panning .node { cursor:grabbing; }
   .zoomctl { position:absolute; top:8px; right:8px; display:flex; flex-direction:column; gap:4px; }
-  .zoomctl button { width:30px; height:30px; padding:0; font-size:16px; line-height:1; }
+  .zoomctl { z-index:3; }
+  .zoomctl button { width:32px; height:32px; padding:0; display:flex; align-items:center; justify-content:center; text-align:center; font-size:18px; font-weight:500; line-height:1; color:var(--ink, #222); box-shadow:0 1px 3px rgba(0,0,0,.12); }
+  .zoomctl button#zfit { font-size:12px; font-weight:600; }
+  .zoomctl button:hover { background:#eef3ff; }
   #emptyMsg { position:absolute; inset:0; display:none; align-items:center; justify-content:center; color:var(--mute); pointer-events:none; }
   mark { background:#fff3c4; padding:0 1px; border-radius:2px; }
   .snippet { font-size:12px; color:var(--mute); margin-top:3px; }
@@ -86,7 +96,6 @@
   .tip { position:fixed; pointer-events:none; background:#1d2430; color:#fff; padding:4px 8px; border-radius:6px; font-size:12px; display:none; max-width:280px; z-index:5; }
   #filterToggle { display:none; }
   @media (max-width:1100px) { body.hide-filters main { grid-template-columns:0 1fr; } body.hide-people aside.people { display:none; } }
-  @media (max-width:760px) { .sidetoggle { display:none; } }
   .sheet-head, #filterFab { display:none; }
   .sheet-head { position:sticky; top:0; z-index:2; background:#fff; padding:12px 0; margin-bottom:4px; border-bottom:1px solid var(--line); align-items:center; gap:10px; }
   .sheet-head b { font-size:16px; flex:1; }
@@ -186,9 +195,11 @@
 <header>
   <h1><span data-ico="network" data-size="20"></span>Institute of Environmental Sciences CML, Leiden University - Theme search dashboard</h1>
   <span class="stats" id="stats"></span>
-  <div class="hbtns"><button class="btn sidetoggle" id="toggleFilters" aria-pressed="true" title="Show or hide the filter menu">Filters</button><button class="btn sidetoggle" id="togglePeople" aria-pressed="true" title="Show or hide the people list">People</button><button class="btn" id="share" title="Copy a link to this exact view"><span data-ico="link"></span><span id="shareTxt">Copy link</span></button><button class="btn" id="reset"><span data-ico="reset"></span>Reset all</button></div>
+  <div class="hbtns"><button class="btn" id="share" title="Copy a link to this exact view"><span data-ico="link"></span><span id="shareTxt">Copy link</span></button></div>
 </header>
 <main>
+  <button class="edgetab edgetab-l" id="edgeFilters" aria-pressed="true" aria-label="Hide filter panel" title="Hide / show the filter panel">‹</button>
+  <button class="edgetab edgetab-r" id="edgePeople" aria-pressed="true" aria-label="Hide people list" title="Hide / show the people list">›</button>
   <aside class="filters" id="filters">
     <div class="sheet-head"><b>Filters</b><button class="btn" id="sheetReset">Reset</button><button class="btn primary" id="sheetDone">Show results</button></div>
     <h2>Search people</h2>
@@ -236,13 +247,14 @@
           <label><span>Show all labels</span> <input type="checkbox" id="allLabels"></label>
         </div>
       </details>
+      <button class="btn" id="reset" title="Clear all filters and selections"><span data-ico="reset"></span>Reset all</button>
     </div>
     <div id="activeFilters"></div>
     <div id="graph-wrap" class="panel">
       <svg id="svg" viewBox="0 0 900 560" preserveAspectRatio="xMidYMid meet"><g id="vp"><g id="halos"></g><g id="edges"></g><g id="nodes"></g></g></svg>
       <aside id="card" hidden aria-live="polite"></aside>
       <div id="emptyMsg">No items for the current filters</div>
-      <div class="zoomctl"><button class="btn" id="zin" title="Zoom in">+</button><button class="btn" id="zout" title="Zoom out">−</button><button class="btn" id="zfit" title="Fit to view" style="font-size:11px">Fit</button></div>
+      <div class="zoomctl"><button class="btn" id="zin" title="Zoom in" aria-label="Zoom in">+</button><button class="btn" id="zout" title="Zoom out" aria-label="Zoom out">−</button><button class="btn" id="zfit" title="Fit to view">Fit</button></div>
     </div>
     <div class="legendbar mute" id="legend"></div>
     <details id="clusterBox" class="panel"><summary id="clusterSum">Clusters</summary><div id="clusters"></div></details>
@@ -368,12 +380,12 @@ function ringOrder(clusters) {   // neighbours on the ring = clusters that share
     left.sort((a, b) => shared(b, cur) - shared(a, cur) || b.members.length - a.members.length);
     seq.push(left.shift());
   }
-  seq.forEach((c, i) => { c.ring = i; });
+  seq.forEach((c, i) => { c.ring = i; c.ringN = seq.length; });
 }
 function clusterAnchor(n, all, W, H) {   // each cluster gets its own spot on an ellipse; multi-cluster people sit between theirs
   let x = 0, y = 0, tw = 0;
   (n.memberships || [n.cluster]).forEach((c, k) => {
-    const i = c.ring !== undefined ? c.ring : Math.max(0, all.indexOf(c)), a = -Math.PI / 2 + i * 2 * Math.PI / Math.max(all.length, 1), w = k ? 1 : 2;
+    const i = c.ring !== undefined ? c.ring : Math.max(0, all.indexOf(c)), a = -Math.PI / 2 + i * 2 * Math.PI / Math.max(c.ringN || all.length, 1), w = k ? 1 : 2;
     x += Math.cos(a) * w; y += Math.sin(a) * w; tw += w;
   });
   return { x: W / 2 + x / tw * W * 0.44, y: H / 2 + y / tw * H * 0.42 };
@@ -615,10 +627,39 @@ function buildClusterGraph(nodes, mode) {
 
 // People map. "CML theme" mode: one node per person, grouped by primary CML theme. "Cluster" mode: the network is built
 // from shared harmonized tags only, and clusters are found on that network.
+const mkPersonNode = p => ({ id: p.name, count: 1, person: p, people: [p], ie: p.field === "industrial_ecology" ? 1 : 0, eb: p.field === "industrial_ecology" ? 0 : 1 });
+// Field/method clusters are computed ONCE on everybody (cached per grouping + detail level); filters only decide who is shown.
+// Clustering the filtered subset instead would merge small groups into whatever is left (e.g. everyone into "Life cycle assessment").
+const fullGraphs = new Map();
+function fullClusterGraph(mode) {
+  const key = mode + ":" + state.resolution;
+  if (!fullGraphs.has(key)) {
+    const all = people.map(mkPersonNode);
+    const g = mode === "method" ? buildMethodGraph(all) : buildClusterGraph(all, "field");
+    g.clusters.forEach(c => { c.ringN = g.clusters.length; });
+    g.nodes.forEach(n => { n.c0 = n.cluster; });
+    fullGraphs.set(key, g);
+  }
+  return fullGraphs.get(key);
+}
+function subsetClusterGraph(full, list) {
+  const keep = new Set(list), nodes = full.nodes.filter(n => keep.has(n.person));
+  const copies = new Map();
+  const clusters = full.clusters.map(c => {
+    const members = c.members.filter(n => keep.has(n.person));
+    const people_ = members.map(n => n.person), ie = people_.filter(p => p.field === "industrial_ecology").length;
+    const c2 = { ...c, nodes: c.nodes.filter(n => keep.has(n.person)), members, people: people_, ie, eb: people_.length - ie, halo: undefined };
+    copies.set(c, c2); return c2;
+  }).filter(c => c.members.length);
+  clusters.forEach((c, i) => { c.id = i; });
+  nodes.forEach(n => { n.cluster = copies.get(n.c0); });
+  const ids = new Set(nodes.map(n => n.id));
+  return { nodes, links: full.links.filter(l => ids.has(l.s.id) && ids.has(l.t.id)), clusters };
+}
 function buildPeopleGraph(list) {
-  const nodes = list.map(p => ({ id: p.name, count: 1, person: p, people: [p], ie: p.field === "industrial_ecology" ? 1 : 0, eb: p.field === "industrial_ecology" ? 0 : 1 }));
   const byTheme = cmlGrouped();
-  if (!byTheme) return state.colorBy === "method" ? buildMethodGraph(nodes) : buildClusterGraph(nodes, "field");
+  if (!byTheme) return subsetClusterGraph(fullClusterGraph(state.colorBy === "method" ? "method" : "field"), list);
+  const nodes = list.map(mkPersonNode);
   const links = [];
   for (let a = 0; a < nodes.length; a++) for (let b = a + 1; b < nodes.length; b++) {
     const A = nodes[a].person, B = nodes[b].person;
@@ -1227,11 +1268,14 @@ $("reset").addEventListener("click", () => {
 
 function toggleSide(cls, btn) {
   const hidden = document.body.classList.toggle(cls);
-  $(btn).setAttribute("aria-pressed", String(!hidden));
+  const b = $(btn), left = btn === "edgeFilters";
+  b.setAttribute("aria-pressed", String(!hidden));
+  b.textContent = left ? (hidden ? "›" : "‹") : (hidden ? "‹" : "›");   // arrow points the way the panel will move
+  b.setAttribute("aria-label", (hidden ? "Show " : "Hide ") + (left ? "filter panel" : "people list"));
   requestAnimationFrame(() => render());   // the map refits to its new width
 }
-$("toggleFilters").addEventListener("click", () => toggleSide("hide-filters", "toggleFilters"));
-$("togglePeople").addEventListener("click", () => toggleSide("hide-people", "togglePeople"));
+$("edgeFilters").addEventListener("click", () => toggleSide("hide-filters", "edgeFilters"));
+$("edgePeople").addEventListener("click", () => toggleSide("hide-people", "edgePeople"));
 function setSheet(on) { document.body.classList.toggle("show-filters", on); if (on) $("filters").scrollTop = 0; }
 $("filterFab").addEventListener("click", () => setSheet(true));
 $("sheetDone").addEventListener("click", () => setSheet(false));
