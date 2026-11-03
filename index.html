@@ -140,6 +140,17 @@
   #activeFilters { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:8px; }
   #activeFilters:empty { display:none; }
   #activeFilters .chip { background:var(--accent); color:#fff; padding:2px 9px; }
+  #card { position:absolute; left:10px; top:10px; width:min(310px, calc(100% - 20px)); max-height:calc(100% - 20px); overflow:auto; background:#fff; border:1px solid var(--line); border-radius:10px; box-shadow:0 6px 24px rgba(0,0,0,.18); padding:12px; z-index:5; font-size:12.5px; }
+  #card[hidden] { display:none; }
+  #card .chead { display:flex; gap:10px; align-items:flex-start; }
+  #card img { width:56px; height:70px; object-fit:cover; border-radius:6px; background:#eee; flex:none; }
+  #card svg.ico { position:static; inset:auto; width:12px; height:12px; }
+  #card h3 { margin:0 0 2px; font-size:15px; }
+  #card .sub { color:var(--mute); }
+  #card .cx { margin-left:auto; border:0; background:none; cursor:pointer; font-size:18px; line-height:1; color:var(--mute); }
+  #card h4 { margin:10px 0 4px; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--mute); }
+  #card .row { display:flex; flex-wrap:wrap; gap:4px; }
+  #card .bio { margin:8px 0 0; line-height:1.4; }
   .halo { pointer-events:none; }
   .halo-label { pointer-events:all; cursor:pointer; }
   .halo-label:hover text, .halo-label.hot text { text-decoration:underline; }
@@ -229,6 +240,7 @@
     <div id="activeFilters"></div>
     <div id="graph-wrap" class="panel">
       <svg id="svg" viewBox="0 0 900 560" preserveAspectRatio="xMidYMid meet"><g id="vp"><g id="halos"></g><g id="edges"></g><g id="nodes"></g></g></svg>
+      <aside id="card" hidden aria-live="polite"></aside>
       <div id="emptyMsg">No items for the current filters</div>
       <div class="zoomctl"><button class="btn" id="zin" title="Zoom in">+</button><button class="btn" id="zout" title="Zoom out">−</button><button class="btn" id="zfit" title="Fit to view" style="font-size:11px">Fit</button></div>
     </div>
@@ -279,7 +291,7 @@ const people = Object.values(DATA).flat().map(p => ({
   hay: [p.name, p.title, p.rank, p.summary, ...p.harmonized_tags, ...(p.original_keywords || [])].join(" \n ").toLowerCase(),
 }));
 
-const state = { depts: new Set(Object.keys(LABELS)), tags: new Set(), kws: new Set(), tagMode: "any", kwMode: "any",
+const state = { card: null, depts: new Set(Object.keys(LABELS)), tags: new Set(), kws: new Set(), tagMode: "any", kwMode: "any",
                 view: "people", cml: new Set(), minCount: 1, resolution: 2, focus: null, allLabels: false, tagQ: "", kwQ: "",
                 q: "", terms: [], colorBy: "cml" };
 
@@ -466,6 +478,8 @@ function methodFeatures(p) {   // method name -> strength
   }
   return p._mf = f;
 }
+// Extra field-cluster memberships on top of the computed ones (person -> field names).
+const FIELD_EXTRA = { "Franco Donati": ["Products & technology"] };
 const FEAT_W = { tag: 1, kw: 0.7, cml: 0.35 };
 function personFeatures(p, mode) {
   const f = new Map();
@@ -587,6 +601,10 @@ function buildClusterGraph(nodes, mode) {
     c.name = top.join(" · ") || "Cluster"; c.short = top[0] || "Cluster";
   });
   if (mode === "method") assignNames(clusters, METHODS, methodScore); else assignNames(clusters, FIELD_NAMES, fieldScore);
+  if (mode !== "method") Object.entries(FIELD_EXTRA).forEach(([person, extra]) => {   // manual extra field memberships
+    const n = nodes.find(x => x.person.name === person); if (!n) return;
+    extra.forEach(name => { const c = clusters.find(x => x.name === name); if (c && !n.memberships.includes(c)) { n.memberships.push(c); c.members.push(n); c.people.push(n.person); if (n.person.field === "industrial_ecology") c.ie++; else c.eb++; } });
+  });
   if (mode === "method") clusters.forEach(c => { if (!METHODS.some(m => m.name === c.name)) c.name = c.short = "Methods not specified"; });   // people without method evidence in their profile
   nodes.forEach(n => { n.deg = 0; });
   links.forEach(l => { l.cross = l.s.cluster !== l.t.cluster; });
@@ -1040,6 +1058,25 @@ function snippet(p) {
   state.terms.forEach(t => { txt = txt.replace(new RegExp(esc(t).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), m => `<mark>${m}</mark>`); });
   return `<div class="snippet">${from ? "…" : ""}${txt}${to < p.summary.length ? "…" : ""}</div>`;
 }
+function renderCard() {
+  const el = $("card"), p = state.card;
+  if (!p || !graph.nodes.some(n => n.person === p)) { el.hidden = true; el.innerHTML = ""; return; }
+  const n = graph.nodes.find(x => x.person === p);
+  const chip = (t, style = "") => `<span class="chip" style="${style}">${esc(t)}</span>`;
+  const themes = p.cml_themes.map(c => `<span class="chip" style="color:${cmlColor(c)}">${icon(c, 12)} ${esc(c)}</span>`).join("");
+  const groups = cmlGrouped() ? "" : `<h4>${state.colorBy === "method" ? "Method" : "Field"} clusters</h4><div class="row">${(n.memberships || []).map((c, i) => `<span class="chip" style="border-color:${c.color};color:${c.color}">${i ? "" : "● "}${esc(c.name)}</span>`).join("")}</div>`;
+  const bio = (p.summary || "").trim(), projects = (p.projects || []).slice(0, 4);
+  el.innerHTML = `<div class="chead"><img src="${esc(p.photo_url)}" alt="" onerror="this.style.visibility='hidden'">
+    <div><h3><a href="${esc(p.profile_url)}" target="_blank" rel="noopener">${esc(p.name)}</a></h3>
+    <div class="sub">${esc(p.rank || p.title || "")}</div><div class="sub">${esc(LABELS[p.field] || "")}</div></div>
+    <button class="cx" id="cardClose" aria-label="Close">×</button></div>
+    <h4>CML themes</h4><div class="row">${themes}</div>${groups}
+    ${p.themes.length ? `<h4>Tags</h4><div class="row">${p.themes.map(t => chip(t)).join("")}</div>` : ""}
+    ${p.kws.length ? `<h4>Keywords</h4><div class="row">${p.kws.map(k => chip(k)).join("")}</div>` : ""}
+    ${bio ? `<h4>About</h4><p class="bio">${esc(bio.length > 650 ? bio.slice(0, 650).replace(/\s+\S*$/, "") + "…" : bio)}</p>` : ""}
+    ${projects.length ? `<h4>Projects</h4><div class="bio">${projects.map(pr => `<div><a href="${esc(pr.url)}" target="_blank" rel="noopener">${esc(pr.title)}</a></div>`).join("")}</div>` : ""}`;
+  el.hidden = false;
+}
 function renderPeople(list) {
   const fl = focusLabels();
   let shown = list;
@@ -1116,6 +1153,7 @@ function render(opts = {}) {
   if (opts.styleOnly) { syncDom(); placeAll(); } else { renderGraph(list); }
   renderClusters();
   renderPeople(list);
+  renderCard();
 }
 
 /* ---------- events ---------- */
@@ -1226,6 +1264,8 @@ $("svg").addEventListener("keydown", e => {
   const l = e.target.closest && e.target.closest(".halo-label");
   if (l && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); l.dispatchEvent(new MouseEvent("click", { bubbles: true })); }
 });
+$("card").addEventListener("click", e => { if (e.target.closest("#cardClose")) { state.card = null; if (state.focus && state.focus.kind === "node") { state.focus = null; render({ styleOnly: true }); } else renderCard(); } });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && state.card) { state.card = null; if (state.focus && state.focus.kind === "node") { state.focus = null; render({ styleOnly: true }); } else renderCard(); } });
 $("zin").addEventListener("click", () => zoomAt(view.W / 2, view.H / 2, 1.3));
 $("zout").addEventListener("click", () => zoomAt(view.W / 2, view.H / 2, 1 / 1.3));
 $("zfit").addEventListener("click", fit);
@@ -1270,7 +1310,7 @@ $("svg").addEventListener("pointermove", e => {
 function endDrag(e) {
   if (!drag) return;
   const d = drag; drag = null; $("svg").classList.remove("panning");
-  if (d.node) { d.node.fixed = false; if (!d.moved) setFocus(nodeFocus(d.node)); else positions.set(d.node.id, { x: d.node.x, y: d.node.y }); }
+  if (d.node) { d.node.fixed = false; if (!d.moved) { setFocus(nodeFocus(d.node)); state.card = state.focus && state.focus.kind === "node" ? d.node.person : null; renderCard(); } else positions.set(d.node.id, { x: d.node.x, y: d.node.y }); }
 }
 $("svg").addEventListener("pointerup", endDrag);
 $("svg").addEventListener("pointercancel", endDrag);
